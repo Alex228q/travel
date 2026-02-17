@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:travel/models/place.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/city.dart';
 import '../services/storage_service.dart';
-import '../widgets/map_button.dart';
 
 class PlacesScreen extends StatefulWidget {
   final City city;
@@ -176,6 +177,42 @@ class _PlacesScreenState extends State<PlacesScreen> {
     }
   }
 
+  Future<void> _reorderPlaces(int oldIndex, int newIndex) async {
+    setState(() {
+      if (newIndex > oldIndex) {
+        newIndex -= 1;
+      }
+      final place = _currentCity.places.removeAt(oldIndex);
+      _currentCity.places.insert(newIndex, place);
+    });
+
+    // Сохраняем новый порядок в StorageService
+    await widget.storageService.updateCity(_currentCity);
+  }
+
+  Future<void> _openMap(Place place) async {
+    String query = '';
+
+    if (place.latitude != null && place.longitude != null) {
+      query = '${place.latitude},${place.longitude}';
+    } else {
+      query = '${_currentCity.name} ${place.name}';
+    }
+
+    final encodedQuery = Uri.encodeComponent(query);
+    final url = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$encodedQuery',
+    );
+
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Не удалось открыть карты')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -200,6 +237,22 @@ class _PlacesScreenState extends State<PlacesScreen> {
         elevation: 2,
         backgroundColor: Colors.blue.shade800,
         foregroundColor: Colors.white,
+        actions: [
+          if (_currentCity.places.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.info_outline),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Для изменения порядка мест нажмите и удерживайте карточку',
+                    ),
+                    duration: Duration(seconds: 3),
+                  ),
+                );
+              },
+            ),
+        ],
       ),
       body: Container(
         color: Colors.grey.shade50,
@@ -227,12 +280,33 @@ class _PlacesScreenState extends State<PlacesScreen> {
                   ],
                 ),
               )
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
+            : ReorderableListView.builder(
+                padding: const EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 16,
+                  bottom: 80,
+                ),
                 itemCount: _currentCity.places.length,
+                onReorder: _reorderPlaces,
+                proxyDecorator: (child, index, animation) {
+                  return AnimatedBuilder(
+                    animation: animation,
+                    builder: (BuildContext context, Widget? child) {
+                      return Material(
+                        elevation: 4,
+                        borderRadius: BorderRadius.circular(12),
+                        child: child,
+                      );
+                    },
+                    child: child,
+                  );
+                },
                 itemBuilder: (context, index) {
                   final place = _currentCity.places[index];
+
                   return Container(
+                    key: ValueKey(place.id),
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -247,13 +321,14 @@ class _PlacesScreenState extends State<PlacesScreen> {
                     ),
                     child: Material(
                       color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              Container(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            // Иконка места - кликабельная для открытия карты
+                            GestureDetector(
+                              onTap: () => _openMap(place),
+                              child: Container(
                                 width: 48,
                                 height: 48,
                                 decoration: BoxDecoration(
@@ -266,8 +341,12 @@ class _PlacesScreenState extends State<PlacesScreen> {
                                   size: 28,
                                 ),
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
+                            ),
+                            const SizedBox(width: 16),
+                            // Название места - тоже кликабельное для открытия карты
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => _openMap(place),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -305,28 +384,61 @@ class _PlacesScreenState extends State<PlacesScreen> {
                                   ],
                                 ),
                               ),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  MapButton(
-                                    cityName: _currentCity.name,
-                                    placeName: place.name,
-                                    latitude: place.latitude,
-                                    longitude: place.longitude,
-                                  ),
-                                  IconButton(
-                                    icon: Icon(
-                                      Icons.delete,
-                                      color: Colors.red.shade700,
-                                      size: 22,
+                            ),
+                            const SizedBox(width: 8),
+                            // Широкая кнопка удаления
+                            SizedBox(
+                              width: 90,
+                              child: ElevatedButton(
+                                onPressed: () =>
+                                    _deletePlace(place.id, place.name),
+                                style:
+                                    ElevatedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 12,
+                                      ),
+                                      backgroundColor: Colors.transparent,
+                                      shadowColor: Colors.transparent,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                    ).copyWith(
+                                      backgroundColor:
+                                          WidgetStateProperty.resolveWith<
+                                            Color
+                                          >((states) {
+                                            if (states.contains(
+                                              WidgetState.pressed,
+                                            )) {
+                                              return Colors.red.shade800;
+                                            }
+                                            return Colors.red.shade400;
+                                          }),
                                     ),
-                                    onPressed: () =>
-                                        _deletePlace(place.id, place.name),
-                                  ),
-                                ],
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.delete_outline,
+                                      size: 16,
+                                      color: Colors.white,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Удалить',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ),

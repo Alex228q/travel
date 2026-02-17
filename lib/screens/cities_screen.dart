@@ -158,7 +158,6 @@ class _CitiesScreenState extends State<CitiesScreen> {
           'Мои города',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
         ),
-
         elevation: 2,
         backgroundColor: Colors.blue.shade800,
         foregroundColor: Colors.white,
@@ -194,7 +193,12 @@ class _CitiesScreenState extends State<CitiesScreen> {
                 ),
               )
             : ListView.builder(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 16,
+                  bottom: 80,
+                ),
                 itemCount: cities.length,
                 itemBuilder: (context, index) {
                   final city = cities[index];
@@ -280,13 +284,59 @@ class _CitiesScreenState extends State<CitiesScreen> {
                                   ],
                                 ),
                               ),
-                              IconButton(
-                                icon: Icon(
-                                  Icons.delete,
-                                  color: Colors.red.shade700,
-                                  size: 24,
+                              const SizedBox(width: 8),
+                              // Кнопка удаления в том же стиле, что и в PlacesScreen
+                              SizedBox(
+                                width: 90,
+                                child: ElevatedButton(
+                                  onPressed: () => _deleteCity(city),
+                                  style:
+                                      ElevatedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 12,
+                                        ),
+                                        backgroundColor: Colors.transparent,
+                                        shadowColor: Colors.transparent,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
+                                      ).copyWith(
+                                        backgroundColor:
+                                            WidgetStateProperty.resolveWith<
+                                              Color
+                                            >((states) {
+                                              if (states.contains(
+                                                WidgetState.pressed,
+                                              )) {
+                                                return Colors.red.shade800;
+                                              }
+                                              return Colors.red.shade400;
+                                            }),
+                                      ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.delete_outline,
+                                        size: 16,
+                                        color: Colors.white,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Удалить',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                onPressed: () => _deleteCity(city),
                               ),
                             ],
                           ),
